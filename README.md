@@ -4,7 +4,7 @@ Un jeu *endless runner* en pixel art / lofi, inspiré du jeu du dinosaure de Chr
 Le joueur incarne un chat qui court dans un décor urbain nocturne et saute par-dessus
 les obstacles. Score, classement mondial en ligne, skins, musique générée et fond animé.
 
-🎮 **Jouer en ligne :** https://ynovpatpat.netlify.app/
+🎮 **Jouer en ligne :** https://lofi-cat-runner.netlify.app/
 
 ---
 

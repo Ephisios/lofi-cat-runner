@@ -2,7 +2,7 @@
 
 **Auteur :** Ephi
 **Type de projet :** application web (jeu navigateur) déployée
-**URL en ligne :** https://ynovpatpat.netlify.app/
+**URL en ligne :** https://lofi-cat-runner.netlify.app/
 
 ---
 
@@ -56,9 +56,9 @@ Netlify offre donc le meilleur rapport simplicité / fiabilité pour ce type de 
 
 1. Développement et test en local (ouverture du fichier `index.html` dans le navigateur).
 2. Mise en ligne sur Netlify via *Netlify Drop* (glisser-déposer du dossier contenant `index.html` et `bg.mp4`).
-3. Personnalisation du sous-domaine du site pour obtenir une URL propre : `https://ynovpatpat.netlify.app/`.
-4. Configuration des identifiants Dreamlo (code public + code privé) pour activer le classement en ligne partagé.
-5. Vérification du bon fonctionnement en conditions réelles (test multi-joueurs sur plusieurs machines).
+3. Configuration des identifiants Dreamlo (code public + code privé) pour activer le classement en ligne partagé.
+4. Vérification du bon fonctionnement en conditions réelles (test multi-joueurs sur plusieurs machines).
+5. Mise en place d'un dépôt **GitHub** et connexion à Netlify pour un **déploiement continu** : chaque `git push` redéploie automatiquement le site. URL finale : `https://lofi-cat-runner.netlify.app/`.
 
 ---
 
@@ -112,7 +112,6 @@ Le projet remplit son objectif : une application web fonctionnelle, accessible p
 Pistes d'amélioration identifiées :
 
 - Ajout d'un véritable backend et d'une base de données privée pour sécuriser les secrets et l'authentification.
-- Mise en place d'un dépôt Git et d'un déploiement continu (CI/CD) connecté à l'hébergeur.
 - Découpage du code en plusieurs fichiers (HTML / CSS / JS séparés) pour améliorer la maintenabilité.
 - Optimisation mobile (contrôles tactiles, mise en page responsive).
 
