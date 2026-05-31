@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lofi Cat Runner</title>
+<style>
+  :root{
+    --bg1:#2b2a3d; --bg2:#3d3a52; --accent:#e8a0bf; --accent2:#a0c4e8;
+    --text:#f4eaf2; --card:rgba(255,255,255,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'Courier New',monospace;}
+  html,body{height:100%;}
+  body{
+    background:linear-gradient(160deg,var(--bg1),var(--bg2));
+    color:var(--text);display:flex;align-items:flex-start;justify-content:center;
+    min-height:100vh;padding:20px;
+  }
+  /* fond vidéo plein écran */
+  .bg-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;
+    z-index:-2;}
+  .bg-overlay{position:fixed;inset:0;z-index:-1;
+    background:radial-gradient(ellipse at center, rgba(20,18,32,.35) 0%, rgba(20,18,32,.7) 100%);}
+  /* colonne centrale type profil Steam : panneau semi-opaque sur la vidéo */
+  .wrap{width:100%;max-width:760px;position:relative;z-index:1;
+    background:rgba(34,32,52,.82);backdrop-filter:blur(2px);
+    border-radius:16px;padding:22px;
+    box-shadow:0 16px 50px rgba(0,0,0,.5);}
+  h1{font-size:1.4rem;letter-spacing:2px;text-align:center;margin-bottom:4px;color:var(--accent);}
+  .sub{text-align:center;font-size:.75rem;opacity:.6;margin-bottom:12px;}
+  .stage{position:relative;width:100%;}
+  canvas{
+    width:100%;display:block;border-radius:14px;
+    box-shadow:0 12px 40px rgba(0,0,0,.45);background:#322f47;image-rendering:pixelated;
+  }
+  .overlay{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    background:rgba(34,32,52,.88);border-radius:14px;backdrop-filter:blur(3px);
+    padding:16px;gap:10px;
+  }
+  .hidden{display:none;}
+  .big{font-size:2rem;color:var(--accent);}
+  input{
+    padding:10px 14px;border-radius:10px;border:2px solid var(--accent2);
+    background:rgba(255,255,255,.08);color:var(--text);font-size:1rem;
+    text-align:center;outline:none;width:220px;
+  }
+  button{
+    padding:10px 22px;border:none;border-radius:10px;cursor:pointer;
+    background:var(--accent);color:#2b2a3d;font-weight:bold;font-size:1rem;
+    letter-spacing:1px;transition:transform .1s,filter .15s;
+  }
+  button:hover{filter:brightness(1.08);transform:translateY(-1px);}
+  .hint{font-size:.75rem;opacity:.6;}
+  .board{width:100%;max-width:320px;text-align:left;background:var(--card);
+    border-radius:10px;padding:12px 16px;max-height:230px;overflow-y:auto;}
+  .board h3{font-size:.8rem;letter-spacing:1px;margin-bottom:8px;color:var(--accent2);text-align:center;}
+  .row{display:flex;justify-content:space-between;font-size:.85rem;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,.1);}
+  .row:last-child{border:none;}
+  .row.me{color:var(--accent);font-weight:bold;}
+  .rank{color:var(--accent2);}
+  .topbar{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;opacity:.85;margin-top:10px;padding:0 4px;gap:10px;}
+  .controls{display:flex;gap:8px;align-items:center;}
+  .icon-btn{background:rgba(255,255,255,.1);color:var(--text);font-size:.8rem;padding:6px 12px;border-radius:8px;}
+  .fullboard{margin-top:14px;}
+  .fullboard h2{font-size:.9rem;letter-spacing:2px;color:var(--accent);text-align:center;margin-bottom:8px;}
+  .status{font-size:.7rem;opacity:.5;text-align:center;margin-top:4px;}
+  .countdown{text-align:center;font-size:.85rem;letter-spacing:1px;color:#ffd97a;
+    margin-bottom:6px;font-weight:bold;}
+  .countdown.ended{color:#e88;}
+  .prize{text-align:center;font-size:.78rem;color:var(--text);opacity:.85;margin-bottom:10px;}
+  .prize b{color:var(--accent);}
+  /* badges médailles top 3 */
+  .medal-badge{display:inline-block;width:15px;height:15px;border-radius:50%;
+    text-align:center;line-height:15px;font-size:.62rem;font-weight:bold;color:#3a2e10;
+    margin-right:5px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.4);}
+  .m1{background:radial-gradient(circle at 35% 30%, #fff2b0, #e8b84b 70%, #b8860b);}
+  .m2{background:radial-gradient(circle at 35% 30%, #ffffff, #c8ced6 70%, #8a929c);}
+  .m3{background:radial-gradient(circle at 35% 30%, #f4c79a, #cd7f44 70%, #8a4f24);color:#3a2410;}
+  .modal{position:fixed;inset:0;background:rgba(20,18,32,.8);backdrop-filter:blur(4px);
+    display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;}
+  .modal.hidden{display:none;}
+  .modal-box{position:relative;background:var(--bg2);border:1px solid rgba(255,255,255,.12);
+    border-radius:16px;padding:26px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .close-x{position:absolute;top:12px;right:12px;background:transparent;color:var(--text);font-size:1rem;padding:4px 8px;}
+  .admin-row{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;
+    padding:5px 0;border-bottom:1px dashed rgba(255,255,255,.1);gap:8px;}
+  .del-btn{background:#d56b6b;color:#fff;font-size:.7rem;padding:4px 10px;border-radius:6px;letter-spacing:0;}
+  /* podium top 5 */
+  .podium-wrap{width:100%;max-width:360px;}
+  .podium-title{font-size:.8rem;letter-spacing:1px;color:var(--accent2);text-align:center;margin-bottom:8px;}
+  .podium{display:flex;justify-content:center;align-items:flex-end;gap:8px;}
+  .pcol{display:flex;flex-direction:column;align-items:center;width:96px;}
+  .medal{font-size:1.5rem;line-height:1;}
+  .pname{font-size:.8rem;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pname.me{color:var(--accent);font-weight:bold;}
+  .pscore{font-size:.78rem;color:var(--accent2);margin-bottom:4px;}
+  .bar{width:100%;border-radius:9px 9px 0 0;display:flex;align-items:flex-start;
+    justify-content:center;font-weight:bold;color:#2b2a3d;padding-top:5px;font-size:1rem;}
+  .bar1{height:78px;background:linear-gradient(#ffe79a,#e8b84b);}
+  .bar2{height:56px;background:linear-gradient(#e6e6f2,#b8b8cc);}
+  .bar3{height:40px;background:linear-gradient(#f0c39a,#c98b6b);}
+  .below{margin-top:12px;}
+  .below .row{display:flex;justify-content:space-between;font-size:.85rem;padding:3px 2px;border-bottom:1px dashed rgba(255,255,255,.1);}
+  .below .row.me{color:var(--accent);font-weight:bold;}
+  /* badge V2 flottant */
+  .v2-badge{position:fixed;top:18px;right:22px;z-index:40;
+    background:var(--accent);color:#2b2a3d;font-weight:bold;letter-spacing:1px;
+    padding:6px 14px;border-radius:20px;font-size:.9rem;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);animation:floaty 2.4s ease-in-out infinite;}
+  @keyframes floaty{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+  .signature{position:fixed;bottom:12px;right:16px;z-index:40;
+    font-size:.78rem;opacity:.55;letter-spacing:1px;color:var(--text);}
+  /* sélecteur de skins */
+  .skins{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:300px;}
+  .skin-cell{width:40px;height:40px;border-radius:8px;cursor:pointer;
+    background:rgba(255,255,255,.06);border:2px solid transparent;
+    display:flex;align-items:center;justify-content:center;transition:border-color .15s, transform .1s;}
+  .skin-cell:hover{transform:translateY(-2px);}
+  .skin-cell.sel{border-color:var(--accent);background:rgba(232,160,191,.15);}
+  .skin-cell canvas{width:32px;height:32px;image-rendering:pixelated;border-radius:0;box-shadow:none;background:transparent;}
+  .skin-name{font-size:.7rem;opacity:.7;margin:0;}
+</style>
+</head>
+<body>
+<video class="bg-video" autoplay loop muted playsinline>
+  <source src="bg.mp4" type="video/mp4">
+</video>
+<div class="bg-overlay"></div>
+<div class="v2-badge">V2</div>
+<div class="signature">By Ephi</div>
+<div class="wrap">
+  <h1>🐱 LOFI CAT RUNNER</h1>
+  <div class="sub">espace / ↑ / clic pour sauter — survis aux plantes</div>
+
+  <div class="stage">
+    <canvas id="game" width="800" height="300"></canvas>
+
+    <!-- Écran d'accueil : pseudo -->
+    <div class="overlay" id="startScreen">
+      <div class="big">miaou ~</div>
+      <p class="hint">Entre ton pseudo pour commencer</p>
+      <input id="nameInput" maxlength="12" placeholder="ton pseudo" autocomplete="off">
+      <p class="skin-name">choisis ton chat : <span id="skinLabel">Roux</span></p>
+      <div class="skins" id="skinPicker"></div>
+      <button id="startBtn">Jouer</button>
+    </div>
+
+    <!-- Écran game over : top 5 -->
+    <div class="overlay hidden" id="overScreen">
+      <div class="big">game over</div>
+      <p id="finalScore" class="hint"></p>
+      <button id="retryBtn">Rejouer</button>
+      <div id="boardOver" class="podium-wrap"></div>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <span id="player">joueur : —</span>
+    <div class="controls">
+      <button class="icon-btn" id="resetBtn">↺ menu</button>
+      <button class="icon-btn" id="muteBtn">🔊 son</button>
+      <span>score : <b id="score">0</b> | record : <b id="best">0</b></span>
+    </div>
+  </div>
+
+  <!-- Scoreboard complet top 20 -->
+  <div class="fullboard">
+    <h2>★ CLASSEMENT MONDIAL — TOP 10 ★</h2>
+    <div id="countdown" class="countdown">⏳ fin du classement dans …</div>
+    <p class="prize">🏆 Le <b>top 1</b> remporte <b>10 €</b> ! Tente ta chance avant la fin.</p>
+    <div class="board" id="boardFull" style="max-width:none;"></div>
+    <div class="status" id="boardStatus"></div>
+    <div style="text-align:center;margin-top:8px;">
+      <button class="icon-btn" id="adminBtn">🔒 admin</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal admin -->
+<div id="adminModal" class="modal hidden">
+  <div class="modal-box">
+    <button class="close-x" id="adminClose">✕</button>
+    <h2 style="color:var(--accent);letter-spacing:2px;margin-bottom:12px;">PANNEAU ADMIN</h2>
+
+    <!-- login -->
+    <div id="adminLogin">
+      <p class="hint" style="margin-bottom:10px;">Connexion modérateur</p>
+      <input id="adminUser" placeholder="identifiant" autocomplete="off" style="margin-bottom:8px;"><br>
+      <input id="adminPass" type="password" placeholder="mot de passe" autocomplete="off"><br>
+      <p id="adminError" class="hint" style="color:#e88;margin-top:8px;min-height:1em;"></p>
+      <button id="adminSubmit" style="margin-top:10px;">Se connecter</button>
+    </div>
+
+    <!-- gestion -->
+    <div id="adminPanel" class="hidden">
+      <p class="hint" style="margin-bottom:10px;">Supprime les pseudos inappropriés du classement.</p>
+      <div class="board" id="adminList" style="max-width:none;max-height:320px;"></div>
+      <button id="adminLogout" style="margin-top:12px;background:rgba(255,255,255,.15);color:var(--text);">Se déconnecter</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG SCOREBOARD EN LIGNE (Dreamlo)
+   1. Va sur https://dreamlo.com/ -> "Get your own leaderboard now"
+   2. Copie tes 2 codes ci-dessous (Public Code et Private/Secret Code)
+   3. Tant que c'est vide, le classement reste LOCAL (sur ce navigateur)
+   ============================================================ */
+const DREAMLO_PUBLIC  = "6a1acbe78f40bb17b0266757";   // <-- colle ton Public Code ici
+const DREAMLO_PRIVATE = "qrPh7ID1K0qHC9bgrej9sAZ87V4zcfQE-Y3Zot-WgmUg";   // <-- colle ton Private/Secret Code ici
+const ONLINE = DREAMLO_PUBLIC && DREAMLO_PRIVATE;
+// Dreamlo gratuit n'autorise pas le HTTPS : on passe par un relais qui va
+// chercher la version HTTP côté serveur (contourne SSL + CORS).
+const DREAMLO_HTTP = "http://www.dreamlo.com/lb";
+const PROXY = "https://api.codetabs.com/v1/proxy/?quest=";
+let onlineOk = false;
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height, GROUND = H - 50;
+
+let player = "";
+let running = false;
+let score = 0, best = 0;
+let speed = 4.6;
+let frame = 0;
+let lastSpawn = 0, spawnGap = 120;
+let pendingBurst = 0;
+let collectibles = [];          // poissons (+points) et étoiles (invincibilité)
+let lastCollect = 0;
+let invincibleUntil = 0;        // timestamp de fin d'invincibilité (ms)
+
+const cat = { x: 70, y: GROUND, w: 44, h: 34, vy: 0, onGround: true };
+const GRAVITY = 0.7, JUMP = -11.5;
+let holding = false, holdFrames = 0;
+const MAX_HOLD = 16; // durée max du saut "long" en maintenant
+let dying = false, deathT = 0, catAngle = 0, deathVy = 0, deathSpin = 0;
+let obstacles = [];
+let clouds = [];
+let lamps = [];
+let stars = [];
+let buildings = [];
+let marks = [];   // marques du Sacrifice (skin Guts)
+
+/* ===================== AUDIO ===================== */
+let audioCtx = null;
+let musicGain = null, sfxGain = null;
+let muted = false;
+let musicTimer = null;
+let musicStep = 0;
+
+function initAudio(){
+  if(audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  musicGain = audioCtx.createGain();
+  musicGain.gain.value = 0.18;
+  musicGain.connect(audioCtx.destination);
+  sfxGain = audioCtx.createGain();
+  sfxGain.gain.value = 0.35;
+  sfxGain.connect(audioCtx.destination);
+}
+
+// note -> fréquence (A4=440)
+function ntf(n){ return 440 * Math.pow(2, (n-69)/12); }
+
+// Progression lofi I-vi-ii-V en Do (chaque accord = 2 mesures). 75 BPM.
+// 16 pas par accord (croches), 4 accords -> boucle ~51s.
+const BPM = 75, STEP = 60/BPM/2; // durée d'une croche
+const CHORDS = [
+  [60,64,67,71], // Cmaj7
+  [57,60,64,67], // Am7
+  [62,65,69,72], // Dm7
+  [55,59,62,65]  // G7
+];
+const BASS = [48,45,50,43];
+
+function playPad(freqs, t, dur){
+  freqs.forEach((f,i)=>{
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'triangle';
+    o.frequency.value = f;
+    o.detune.value = (i-1)*4; // léger désaccord chaud
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.25, t+0.05);
+    g.gain.linearRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(musicGain);
+    o.start(t); o.stop(t+dur+0.05);
+  });
+}
+function playBass(f, t, dur){
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.5, t+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+  o.connect(g); g.connect(musicGain);
+  o.start(t); o.stop(t+dur+0.05);
+}
+function playKick(t){
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.frequency.setValueAtTime(140, t);
+  o.frequency.exponentialRampToValueAtTime(45, t+0.12);
+  g.gain.setValueAtTime(0.7, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+0.18);
+  o.connect(g); g.connect(musicGain);
+  o.start(t); o.stop(t+0.2);
+}
+function playHat(t){
+  const b = audioCtx.createBuffer(1, audioCtx.sampleRate*0.05, audioCtx.sampleRate);
+  const d = b.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);
+  const s = audioCtx.createBufferSource(); s.buffer=b;
+  const hp = audioCtx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=7000;
+  const g = audioCtx.createGain(); g.gain.value=0.12;
+  s.connect(hp); hp.connect(g); g.connect(musicGain);
+  s.start(t);
+}
+
+function scheduleMusic(){
+  if(!audioCtx) return;
+  const t = audioCtx.currentTime + 0.05;
+  const chordIdx = Math.floor(musicStep/16) % 4;
+  const sub = musicStep % 16;
+  // pad + basse au début de chaque accord
+  if(sub === 0){ playPad(CHORDS[chordIdx].map(ntf), t, STEP*16); playBass(ntf(BASS[chordIdx]), t, STEP*8); }
+  if(sub === 8){ playBass(ntf(BASS[chordIdx]), t, STEP*8); }
+  // batterie lofi : kick sur 0 et 8, hats sur les temps pairs
+  if(sub===0 || sub===10) playKick(t);
+  if(sub%2===0) playHat(t);
+  musicStep = (musicStep+1) % 64;
+}
+
+function startMusic(){
+  if(muted || !audioCtx || musicTimer) return;
+  musicStep = 0;
+  scheduleMusic();
+  musicTimer = setInterval(scheduleMusic, STEP*1000);
+}
+function stopMusic(){ if(musicTimer){ clearInterval(musicTimer); musicTimer=null; } }
+
+// 4 sons de saut différents (mélodiques, pas de spam)
+const JUMP_NOTES = [
+  [72,79], [74,81], [76,83], [69,76]
+];
+let lastJumpSfx = -1;
+function playJumpSfx(){
+  if(muted || !audioCtx) return;
+  let i; do { i = Math.floor(Math.random()*JUMP_NOTES.length); } while(i===lastJumpSfx && JUMP_NOTES.length>1);
+  lastJumpSfx = i;
+  const [a,b] = JUMP_NOTES[i];
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'square';
+  o.frequency.setValueAtTime(ntf(a), t);
+  o.frequency.exponentialRampToValueAtTime(ntf(b), t+0.12);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.3, t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+0.18);
+  o.connect(g); g.connect(sfxGain);
+  o.start(t); o.stop(t+0.2);
+}
+
+document.getElementById('muteBtn').addEventListener('click', ()=>{
+  muted = !muted;
+  document.getElementById('muteBtn').textContent = muted ? '🔇 muet' : '🔊 son';
+  if(muted){
+    stopMusic();
+  } else {
+    initAudio();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    startMusic();   // relance la musique quel que soit l'écran
+  }
+});
+
+/* ===================== SCOREBOARD ===================== */
+function localScores(){ try{ return JSON.parse(localStorage.getItem('catScores')||'[]'); }catch(e){ return []; } }
+function localSave(name, sc){
+  const l = localScores(); l.push({name, score:sc});
+  l.sort((a,b)=>b.score-a.score);
+  localStorage.setItem('catScores', JSON.stringify(l.slice(0,50)));
+}
+
+async function submitScore(name, sc){
+  localSave(name, sc); // toujours une copie locale de secours
+  if(!ONLINE) return;
+  const u = `${DREAMLO_HTTP}/${DREAMLO_PRIVATE}/add/${encodeURIComponent(name)}/${sc}`;
+  try{ await fetch(PROXY + encodeURIComponent(u)); }
+  catch(e){ console.warn('Dreamlo add échoué', e); }
+}
+
+async function fetchScores(){
+  if(ONLINE){
+    const u = `${DREAMLO_HTTP}/${DREAMLO_PUBLIC}/json`;
+    try{
+      const r = await fetch(PROXY + encodeURIComponent(u));
+      const data = await r.json();
+      if(data && data.dreamlo){
+        onlineOk = true;
+        let e = data.dreamlo.leaderboard ? data.dreamlo.leaderboard.entry : null;
+        if(!e) return [];
+        if(!Array.isArray(e)) e = [e];
+        return e.map(x=>({name:x.name, score:parseInt(x.score,10)}))
+                .sort((a,b)=>b.score-a.score);
+      }
+    }catch(err){ console.warn('Dreamlo injoignable, fallback local', err); }
+    onlineOk = false;
+  }
+  return localScores();
+}
+
+function renderRows(el, list, n, myName){
+  let html = '';
+  if(!list.length) html = '<div class="row"><span>aucun score pour l’instant</span></div>';
+  list.slice(0,n).forEach((s,i)=>{
+    const me = myName && s.name===myName ? ' me' : '';
+    let medal = '';
+    if(i===0) medal = '<span class="medal-badge m1">1</span>';
+    else if(i===1) medal = '<span class="medal-badge m2">2</span>';
+    else if(i===2) medal = '<span class="medal-badge m3">3</span>';
+    const rank = medal || `<span class="rank">#${i+1}</span> `;
+    html += `<div class="row${me}"><span>${rank}${esc(s.name)}</span><span>${s.score}</span></div>`;
+  });
+  el.innerHTML = html;
+}
+function esc(t){ return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// podium 1/2/3 + lignes 4/5 dessous
+function renderPodium(list, myName){
+  const el = document.getElementById('boardOver');
+  if(!list.length){ el.innerHTML = '<div class="hint">aucun score pour l’instant</div>'; return; }
+  const top = list.slice(0,4);
+  const col = (s, rank, medal) => {
+    if(!s) return `<div class="pcol"><div class="medal"> </div><div class="pname"></div><div class="pscore"></div><div class="bar bar${rank}" style="opacity:.25">${rank}</div></div>`;
+    const me = myName && s.name===myName ? ' me' : '';
+    return `<div class="pcol">
+      <div class="medal">${medal}</div>
+      <div class="pname${me}">${esc(s.name)}</div>
+      <div class="pscore">${s.score}</div>
+      <div class="bar bar${rank}">${rank}</div>
+    </div>`;
+  };
+  let html = '<div class="podium-title">★ PODIUM ★</div><div class="podium">'
+    + col(top[1], 2, '🥈') + col(top[0], 1, '🥇') + col(top[2], 3, '🥉')
+    + '</div>';
+  if(top[3]){
+    const me = myName && top[3].name===myName ? ' me' : '';
+    html += `<div class="below"><div class="row${me}"><span><span class="rank">#4</span> ${esc(top[3].name)}</span><span>${top[3].score}</span></div></div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function refreshFullBoard(){
+  const st = document.getElementById('boardStatus');
+  st.textContent = ONLINE ? 'chargement du classement en ligne…' : 'classement local (ajoute tes codes Dreamlo pour le mode en ligne)';
+  const list = await fetchScores();
+  renderRows(document.getElementById('boardFull'), list, 10, player);
+  st.textContent = !ONLINE ? 'classement local (ajoute tes codes Dreamlo pour le mode en ligne)'
+                 : (onlineOk ? 'classement mondial en ligne (Dreamlo)' : 'hors ligne — affichage du classement local');
+}
+async function bestFor(name){
+  const list = await fetchScores();
+  return list.filter(s=>s.name===name).reduce((m,s)=>Math.max(m,s.score),0);
+}
+
+/* ===================== SKINS DE CHAT ===================== */
+// chaque skin : body=corps, dark=pattes/ombre, ear=intérieur oreille+nez,
+// eye=oeil, accent=rayures/tache (null = aucune)
+const SKINS = [
+  { id:'roux',    name:'Roux',     body:'#f4a85a', dark:'#d98636', ear:'#e8a0bf', eye:'#3a2e2e', accent:'#d98636', pattern:'stripes' },
+  { id:'creme',   name:'Crème',    body:'#f4d3a0', dark:'#d9b486', ear:'#e8a0bf', eye:'#3a2e2e', accent:null,      pattern:'none' },
+  { id:'gris',    name:'Gris',     body:'#a9b4c2', dark:'#7e8a99', ear:'#e8a0bf', eye:'#3a2e2e', accent:'#7e8a99', pattern:'stripes' },
+  { id:'noir',    name:'Noir',     body:'#4a4458', dark:'#332f40', ear:'#e8a0bf', eye:'#ffe79a', accent:null,      pattern:'none' },
+  { id:'calico',  name:'Calico',   body:'#f4ead9', dark:'#d9b486', ear:'#e8a0bf', eye:'#3a2e2e', accent:'#c97b3c', pattern:'patch' },
+  { id:'lofi',    name:'Lofi',     body:'#bfa6e0', dark:'#9a82c4', ear:'#a0c4e8', eye:'#2b2a3d', accent:'#a0c4e8', pattern:'stripes' },
+  { id:'guts',    name:'Guts',     body:'#5a3a30', dark:'#2e1c18', ear:'#d33', eye:'#d33', accent:'#3a2420', pattern:'cape', special:'bloodmoon' }
+];
+let currentSkin = SKINS[0];
+
+// dessine le chat (origine = coin haut-gauche du sprite), w/h = taille, step = anim pattes
+function drawCatSprite(c, w, h, skin, step){
+  if(skin.pattern==='cape'){ drawGutsSprite(c, w, h, skin, step); return; }
+  c.fillStyle = skin.body;
+  c.fillRect(0, 8, w, h-8);            // corps
+  c.fillRect(w-18, 0, 18, 16);         // tête
+  c.beginPath(); c.moveTo(w-18,0); c.lineTo(w-14,-7); c.lineTo(w-9,0); c.closePath(); c.fill();  // oreille
+  c.beginPath(); c.moveTo(w-9,0); c.lineTo(w-4,-7); c.lineTo(w,0); c.closePath(); c.fill();      // oreille
+  c.fillRect(-8, 2, 10, 6);            // queue
+  // motif
+  if(skin.pattern==='stripes' && skin.accent){
+    c.fillStyle = skin.accent;
+    c.fillRect(4, 8, 3, h-8); c.fillRect(12, 8, 3, h-8); c.fillRect(20, 8, 3, h-8);
+    c.fillRect(-8, 2, 4, 6); // bout de queue
+  } else if(skin.pattern==='patch' && skin.accent){
+    c.fillStyle = skin.accent;
+    c.fillRect(0, 8, 12, 10);          // tache sur le dos
+    c.fillRect(w-16, 0, 8, 8);         // tache sur la tête
+  }
+  // intérieur oreille + nez
+  c.fillStyle = skin.ear;
+  c.fillRect(w-2, 9, 3, 2);            // nez
+  // pattes (animées)
+  c.fillStyle = skin.dark;
+  c.fillRect(6, h-4, 7, 6+step%4);
+  c.fillRect(w-16, h-4, 7, 6+(step+2)%4);
+  // oeil
+  c.fillStyle = skin.eye;
+  c.fillRect(w-7, 5, 3, 3);
+}
+
+// personnage "Guts" : guerrier pixel art (cheveux noirs, armure, cape, épée dos)
+// dessiné via une grille de pixels pour un vrai rendu pixel-art net
+const GUTS_PAL = {
+  '.':null,
+  'H':'#15110d',  // cheveux noirs
+  'h':'#2a2018',  // mèche claire cheveux
+  'S':'#d8b48c',  // peau
+  's':'#b5895f',  // peau ombre
+  'e':'#1a1410',  // yeux
+  'A':'#39424f',  // armure
+  'a':'#4f5a68',  // armure claire
+  'l':'#8c98a8',  // métal clair / épaulière
+  'C':'#6e1c15',  // cape rouge sombre
+  'c':'#4a120d',  // cape ombre
+  'G':'#caa15a',  // garde épée (or)
+  'B':'#dfe6ee',  // lame épée
+  'b':'#3a2c1e',  // bottes/ceinture cuir
+  'k':'#23170f'   // ceinture sombre
+};
+// 14 colonnes x 22 lignes — guerrier façon Berserk, épée dans le dos
+const GUTS_ROWS = [
+  ".....HHHH.....",
+  "....HHHHHH...B",
+  "...HHHHHHHH.B.",
+  "...HhHHHhH.B..",
+  "..HSSSSSSHB...",
+  "..HSeSSeSG....",   // yeux
+  "..HSSSSSSGG...",   // garde épée
+  "..sSSSSSs.G...",
+  "...ssSss..b...",   // menton + manche
+  "..ClAAAAlc....",   // épaulières + cape
+  ".CClAaaAlCC...",
+  ".CcAAaaAAcC...",
+  ".CcAAaaAAcC...",
+  "..cAAaaAAc....",
+  "..kkbbbbkk....",   // ceinture
+  "...AAA AAA....",   // jambes (entrejambe)
+  "...AAA.AAA....",
+  "...AAA.AAA....",
+  "...bbb.bbb....",
+  "..bbbb.bbbb...",   // bottes
+  "..bbbb.bbbb...",
+  "..bbb...bbb..."
+];
+function drawGutsSprite(c, w, h, skin, step){
+  const cols = 14, rowsN = GUTS_ROWS.length;
+  const headRows = 4;                         // lignes au-dessus de l'origine (au-dessus du corps)
+  const px = w / cols;
+  const py = h / (rowsN - headRows);
+  const offY = -headRows * py;
+  const bob = (step%4>1) ? 1 : 0;
+  for(let r=0;r<rowsN;r++){
+    let rowShift = 0;
+    if(r>=18){ rowShift = (r%2===0?bob:1-bob); }   // jambes/bottes animées
+    const row = GUTS_ROWS[r];
+    for(let q=0;q<row.length;q++){
+      const ch = row[q];
+      const col = GUTS_PAL[ch];
+      if(!col) continue;
+      c.fillStyle = col;
+      c.fillRect(Math.round(q*px), Math.round(offY + r*py + rowShift), Math.ceil(px), Math.ceil(py)+1);
+    }
+  }
+}
+
+/* ===================== DESSIN ===================== */
+function drawCat(){
+  const {x,y,w,h} = cat;
+  ctx.save();
+  if(dying){
+    const cx = x + w/2, cy = y - h/2;       // pivot = centre du chat
+    ctx.translate(cx, cy);
+    ctx.rotate(catAngle);
+    ctx.translate(-cx, -cy);
+  }
+  ctx.translate(x, y-h);
+  const step = cat.onGround ? (Math.floor(frame/5)%2===0 ? 0 : 6) : 3;
+  drawCatSprite(ctx, w, h, currentSkin, step);
+  ctx.restore();
+}
+
+// obstacles urbains pixel art : 0=poubelle, 1=barrière de chantier, 2=banc
+function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(Math.round(x),Math.round(y),Math.ceil(w),Math.ceil(h)); }
+function drawObstacle(o){
+  const bx = o.x, baseY = o.y, w = o.w, h = o.h;
+  if(o.type===0){ // ---- POUBELLE métallique ----
+    const top = baseY - h;
+    px(bx, top+5, w, h-5, '#8a96a6');          // corps
+    px(bx+2, top+5, 3, h-5, '#aab4c2');        // reflet clair
+    px(bx+w-4, top+5, 3, h-5, '#6b7686');      // ombre
+    // stries verticales
+    for(let i=bx+6;i<bx+w-4;i+=5) px(i, top+8, 1.5, h-10, '#6b7686');
+    // couvercle
+    px(bx-2, top+1, w+4, 5, '#6b7686');
+    px(bx-2, top, w+4, 2, '#aab4c2');
+    px(bx+w/2-2, top-4, 4, 4, '#8a96a6');      // poignée
+  } else if(o.type===1){ // ---- BARRIÈRE DE CHANTIER ----
+    const top = baseY - h;
+    // pieds
+    px(bx+3, top+10, 4, h-10, '#6b4a2a');
+    px(bx+w-7, top+10, 4, h-10, '#6b4a2a');
+    // panneau rayé jaune/noir
+    px(bx, top, w, 14, '#1c1c1c');
+    for(let i=0;i<w;i+=10){ px(bx+i, top, 5, 14, '#f2c12e'); }
+    px(bx, top, w, 2, '#1c1c1c'); px(bx, top+12, w, 2, '#1c1c1c');
+    // gyrophares rouges
+    px(bx+1, top-5, 5, 5, '#d33'); px(bx+w-6, top-5, 5, 5, '#d33');
+    px(bx+2, top-4, 2, 2, '#f99'); px(bx+w-5, top-4, 2, 2, '#f99');
+  } else { // ---- BANC public ----
+    const top = baseY - h;
+    // pieds
+    px(bx+4, top+h*0.45, 4, h*0.55, '#5a6470');
+    px(bx+w-8, top+h*0.45, 4, h*0.55, '#5a6470');
+    // assise (lattes)
+    px(bx, top+h*0.42, w, 6, '#6a9c6a');
+    px(bx, top+h*0.42, w, 2, '#7fb87f');
+    // dossier (lattes)
+    px(bx, top, w, 5, '#6a9c6a');
+    px(bx, top+8, w, 5, '#5e8c5e');
+    // montants du dossier
+    px(bx+4, top, 4, h*0.45, '#5a6470');
+    px(bx+w-8, top, 4, h*0.45, '#5a6470');
+  }
+}
+
+// objets à récupérer : poisson (+points) et étoile (invincibilité)
+function drawCollectible(o){
+  const cx = o.x, cy = o.y, bob = Math.sin((frame+o.seed)*0.12)*3;  // flotte
+  if(o.type==='fish'){
+    const y = cy + bob;
+    // corps
+    ctx.fillStyle = '#5aa6c4';
+    ctx.beginPath(); ctx.ellipse(cx, y, 11, 6, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#3d7e99';
+    ctx.beginPath(); ctx.ellipse(cx-2, y+1, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+    // queue
+    ctx.fillStyle = '#5aa6c4';
+    ctx.beginPath(); ctx.moveTo(cx+9, y); ctx.lineTo(cx+16, y-5); ctx.lineTo(cx+16, y+5); ctx.closePath(); ctx.fill();
+    // œil
+    ctx.fillStyle = '#fff'; ctx.fillRect(cx-7, y-2, 3, 3);
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(cx-6, y-1, 1.5, 1.5);
+  } else { // star
+    const y = cy + bob;
+    const spin = Math.sin(frame*0.08)*0.15;
+    ctx.save(); ctx.translate(cx, y); ctx.rotate(spin);
+    // halo
+    const glow = ctx.createRadialGradient(0,0,2,0,0,22);
+    glow.addColorStop(0,'rgba(255,230,120,.6)'); glow.addColorStop(1,'rgba(255,230,120,0)');
+    ctx.fillStyle = glow; ctx.fillRect(-22,-22,44,44);
+    // étoile 5 branches
+    ctx.fillStyle = '#ffd633'; ctx.strokeStyle = '#caa11e'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for(let i=0;i<10;i++){
+      const ang = -Math.PI/2 + i*Math.PI/5;
+      const r = (i%2===0) ? 12 : 5;
+      const px2 = Math.cos(ang)*r, py2 = Math.sin(ang)*r;
+      if(i===0) ctx.moveTo(px2,py2); else ctx.lineTo(px2,py2);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // yeux style Mario
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(-3,-2,2,4); ctx.fillRect(1,-2,2,4);
+    ctx.restore();
+  }
+}
+
+function drawGround(){
+  ctx.strokeStyle = 'rgba(255,255,255,.25)';
+  ctx.beginPath(); ctx.moveTo(0, GROUND); ctx.lineTo(W, GROUND); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.12)';
+  for(let i=0;i<W;i+=40){ ctx.fillRect(i-(frame*speed)%40, GROUND+8, 12, 2); }
+}
+// lune de sang (skin Guts) — au fond, la ville passe devant, visible aux 3/4
+function drawBloodMoon(){
+  const mx = W*0.74, my = GROUND - 70, r = 46;
+  // halo rougeâtre
+  const halo = ctx.createRadialGradient(mx, my, r*0.6, mx, my, r*2.1);
+  halo.addColorStop(0, 'rgba(200,50,40,.35)');
+  halo.addColorStop(1, 'rgba(200,50,40,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(mx-r*2.1, my-r*2.1, r*4.2, r*4.2);
+  // disque
+  const g = ctx.createRadialGradient(mx-r*0.3, my-r*0.3, r*0.2, mx, my, r);
+  g.addColorStop(0, '#e8632e');
+  g.addColorStop(0.6, '#c23320');
+  g.addColorStop(1, '#7e1f16');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI*2); ctx.fill();
+  // cratères / taches sombres
+  ctx.fillStyle = 'rgba(90,20,15,.5)';
+  ctx.beginPath(); ctx.arc(mx-14, my-8, 7, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(mx+10, my+6, 9, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(mx+6, my-16, 4, 0, Math.PI*2); ctx.fill();
+}
+
+// Marque du Sacrifice (Berserk) — dessinée dans un repère centré (taille ~r)
+function drawBrand(cx, cy, r, alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = '#b5231c';
+  ctx.lineWidth = Math.max(2, r*0.16);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const u = r/10;
+  // tige verticale principale
+  ctx.beginPath(); ctx.moveTo(cx, cy-9*u); ctx.lineTo(cx, cy+10*u); ctx.stroke();
+  // pointe inférieure (V)
+  ctx.beginPath(); ctx.moveTo(cx-5*u, cy+4*u); ctx.lineTo(cx, cy+10*u); ctx.lineTo(cx+5*u, cy+4*u); ctx.stroke();
+  // barre horizontale haute + petits bras
+  ctx.beginPath(); ctx.moveTo(cx-7*u, cy-3*u); ctx.lineTo(cx+7*u, cy-3*u); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-7*u, cy-3*u); ctx.lineTo(cx-9*u, cy-7*u); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+7*u, cy-3*u); ctx.lineTo(cx+9*u, cy-7*u); ctx.stroke();
+  // pointe supérieure
+  ctx.beginPath(); ctx.moveTo(cx-3*u, cy-6*u); ctx.lineTo(cx, cy-9*u); ctx.lineTo(cx+3*u, cy-6*u); ctx.stroke();
+  ctx.restore();
+}
+
+function drawMarks(){
+  marks.forEach(m=> drawBrand(m.x, m.y, m.r, m.a));
+}
+
+// étoiles qui scintillent doucement
+function drawStars(){
+  stars.forEach(s=>{
+    s.ph += s.sp;
+    const a = 0.35 + 0.45 * (0.5 + 0.5*Math.sin(s.ph)); // pulsation
+    ctx.fillStyle = `rgba(255,250,230,${a})`;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+  });
+}
+
+// silhouette de ville lointaine (défile lentement, posée sur un horizon surélevé)
+function drawSkyline(){
+  const baseY = GROUND - 28;   // horizon au-dessus du sol = plus loin
+  buildings.forEach(b=>{
+    ctx.fillStyle = '#241f33';                 // opaque : cache la lune
+    ctx.fillRect(b.x, baseY - b.h, b.w, b.h);
+    ctx.fillStyle = '#2e2840';                 // léger relief en haut
+    ctx.fillRect(b.x, baseY - b.h, b.w, 3);
+    // fenêtres allumées (plus discrètes)
+    ctx.fillStyle = 'rgba(255,221,150,.4)';
+    b.wins.forEach(w=> ctx.fillRect(b.x + w.x, baseY - b.h + w.y, 3, 4));
+  });
+}
+
+function drawClouds(){
+  ctx.fillStyle = 'rgba(255,255,255,.08)';
+  clouds.forEach(c=>{
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, c.r, c.r*0.6, 0, 0, Math.PI*2);
+    ctx.ellipse(c.x+c.r, c.y+4, c.r*0.8, c.r*0.5, 0, 0, Math.PI*2);
+    ctx.fill();
+  });
+}
+
+// lampadaires rétro avec halo de lumière
+function drawLamps(){
+  lamps.forEach(l=>{
+    const baseX = l.x, topY = GROUND - l.h;     // sommet du poteau
+    const headX = baseX + 26;                    // tête du lampadaire (bras vers la droite)
+    const headY = topY + 6;
+    // scintillement : intensité qui vacille légèrement (effet néon)
+    if(l.flick === undefined){ l.flick = Math.random()*10; }
+    l.flick += 0.3;
+    let k = 0.82 + 0.18*Math.sin(l.flick) + 0.10*Math.sin(l.flick*2.7);
+    if(Math.random() < 0.015) k *= 0.5;   // bref clignotement aléatoire
+    k = Math.max(0.4, Math.min(1.1, k));
+    // halo lumineux (dégradé radial chaud)
+    const glow = ctx.createRadialGradient(headX, headY+6, 4, headX, headY+6, 90);
+    glow.addColorStop(0, `rgba(255,224,150,${0.55*k})`);
+    glow.addColorStop(0.4, `rgba(255,210,120,${0.22*k})`);
+    glow.addColorStop(1, 'rgba(255,210,120,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(headX-90, headY-60, 180, 200);
+    // poteau
+    ctx.fillStyle = '#2f4a4a';
+    ctx.fillRect(baseX-3, topY+8, 6, l.h-8);
+    // socle
+    ctx.fillStyle = '#3a5a5a';
+    ctx.beginPath(); ctx.moveTo(baseX-9, GROUND); ctx.lineTo(baseX-4, GROUND-16);
+    ctx.lineTo(baseX+4, GROUND-16); ctx.lineTo(baseX+9, GROUND); ctx.closePath(); ctx.fill();
+    // bras courbe vers la lampe
+    ctx.strokeStyle = '#2f4a4a'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(baseX, topY+10);
+    ctx.quadraticCurveTo(baseX, topY, headX, headY); ctx.stroke();
+    // tête / abat-jour
+    ctx.fillStyle = '#3a5a5a';
+    ctx.beginPath(); ctx.moveTo(headX-9, headY+2); ctx.lineTo(headX+9, headY+2);
+    ctx.lineTo(headX+6, headY+11); ctx.lineTo(headX-6, headY+11); ctx.closePath(); ctx.fill();
+    // ampoule allumée (suit le scintillement)
+    ctx.fillStyle = `rgba(255,245,200,${0.55+0.45*Math.min(1,k)})`;
+    ctx.fillRect(headX-5, headY+9, 10, 4);
+  });
+}
+
+/* ===================== LOGIQUE ===================== */
+async function reset(){
+  score = 0; speed = 4.6; frame = 0;
+  lastSpawn = 0; spawnGap = 120; holdFrames = 0; pendingBurst = 0;
+  collectibles = []; lastCollect = 0; invincibleUntil = 0;
+  dying = false; deathT = 0; catAngle = 0; deathVy = 0;
+  cat.y = GROUND; cat.vy = 0; cat.onGround = true;
+  obstacles = [];
+  clouds = [];
+  for(let i=0;i<4;i++) clouds.push({x:Math.random()*W, y:30+Math.random()*90, r:18+Math.random()*16});
+  lamps = [];
+  for(let i=0;i<2;i++) lamps.push({x: 250 + i*420, h: 130});
+  marks = [];
+  // étoiles scintillantes (haut du ciel)
+  stars = [];
+  for(let i=0;i<46;i++) stars.push({
+    x: Math.random()*W, y: 14 + Math.random()*(GROUND*0.55),
+    r: 0.6 + Math.random()*1.4, ph: Math.random()*Math.PI*2, sp: 0.02 + Math.random()*0.04
+  });
+  // silhouette de ville (couche lointaine) : immeubles avec fenêtres
+  buildings = [];
+  let bx = 0;
+  while(bx < W + 120){
+    const bw = 34 + Math.random()*44;
+    const bh = 28 + Math.random()*55;
+    const wins = [];
+    for(let wy=0; wy<bh-14; wy+=12){
+      for(let wx=5; wx<bw-8; wx+=12){
+        if(Math.random() < 0.45) wins.push({x:wx, y:wy+8});
+      }
+    }
+    buildings.push({x:bx, w:bw, h:bh, wins});
+    bx += bw + 6;
+  }
+  best = await bestFor(player);
+  document.getElementById('best').textContent = best;
+}
+
+// écart variable avant le prochain obstacle, plus dur avec le score
+function nextGap(){
+  const diff = Math.min(score/3500, 2);         // monte plus lentement, plafond plus bas
+  let min = 100 - diff*12;                       // obstacles plus espacés
+  let max = 180 - diff*26;
+  min = Math.max(min, 64);
+  max = Math.max(max, min + 36);
+  // probabilité d'un "burst" : un paquet d'obstacles VRAIMENT collés
+  const burstChance = 0.07 + diff*0.06;         // ~0.07 au début -> ~0.19
+  pendingBurst = (Math.random() < burstChance) ? (1 + (Math.random()<0.35 ? 1 : 0)) : 0;
+  return min + Math.random()*(max - min);
+}
+
+function makeObstacle(x){
+  const t = Math.floor(Math.random()*3); // 0=poubelle, 1=barrière, 2=banc
+  let h, w;
+  if(t===0){ h=30; w=22; }          // poubelle (petit/moyen)
+  else if(t===1){ h=44; w=34; }     // barrière de chantier (haute)
+  else { h=30; w=52; }              // banc (large, bas)
+  obstacles.push({ x, y: GROUND, w, h, type:t });
+  return w;
+}
+
+function spawnObstacle(){
+  let x = W + 20;
+  let w = makeObstacle(x);
+  // burst : on colle 1 ou 2 obstacles juste derrière, sans aucun écart
+  for(let i=0; i<pendingBurst; i++){
+    x += w + 2;                     // collés (2px seulement)
+    w = makeObstacle(x);
+  }
+  pendingBurst = 0;
+}
+
+function jump(){
+  if(!running) return;
+  if(cat.onGround){ cat.vy = JUMP; cat.onGround = false; holdFrames = 0; playJumpSfx(); }
+}
+
+function collide(o){
+  const cx = cat.x+4, cy = cat.y - cat.h, cw = cat.w-8, ch = cat.h;
+  const ox = o.x, oy = o.y - o.h, ow = o.w, oh = o.h;
+  return cx < ox+ow && cx+cw > ox && cy < oy+oh && cy+ch > oy;
+}
+
+// déclenche l'animation ragdoll : le chat décolle et tourne sur lui-même
+function startDeath(){
+  running = false; holding = false;
+  dying = true; deathT = 0; catAngle = 0;
+  deathVy = -9; deathSpin = (Math.random() < 0.5 ? -1 : 1) * (0.32 + Math.random()*0.12);
+}
+
+async function finishDeath(){
+  await submitScore(player, score);
+  document.getElementById('finalScore').textContent = `${player} — ${score} points`;
+  const list = await fetchScores();
+  renderPodium(list, player);
+  document.getElementById('overScreen').classList.remove('hidden');
+  refreshFullBoard();
+}
+
+function loop(){
+  ctx.clearRect(0,0,W,H);
+  drawStars();
+  if(currentSkin.special==='bloodmoon') drawBloodMoon();   // au fond
+  drawSkyline();                                            // ville devant la lune
+  if(currentSkin.special==='bloodmoon') drawMarks();        // marques dans le ciel
+  drawClouds();
+  drawLamps();
+  drawGround();
+
+  if(running){
+    frame++;
+    // saut variable : gravité réduite tant qu'on maintient et qu'on monte
+    let g = GRAVITY;
+    if(holding && cat.vy < 0 && holdFrames < MAX_HOLD){ g = GRAVITY*0.38; holdFrames++; }
+    cat.vy += g; cat.y += cat.vy;
+    if(cat.y >= GROUND){ cat.y = GROUND; cat.vy = 0; cat.onGround = true; }
+    clouds.forEach(c=>{ c.x -= speed*0.2; if(c.x < -40){ c.x = W+40; c.y=30+Math.random()*90; } });
+    // Marque du Sacrifice : apparaît de temps en temps (skin Guts), taille ~nuage
+    if(currentSkin.special==='bloodmoon'){
+      if(Math.random() < 0.0009 && marks.length < 1){
+        marks.push({ x: W+30, y: 26+Math.random()*55, r: 13+Math.random()*4, a: 0 });
+      }
+      marks.forEach(m=>{ m.x -= speed*0.2; m.a = Math.min(0.85, m.a+0.02); });
+      marks = marks.filter(m=> m.x > -40);
+    }
+    // ville lointaine : défile très lentement (parallaxe)
+    buildings.forEach(b=>{ b.x -= speed*0.12; });
+    if(buildings.length && buildings[0].x + buildings[0].w < 0){
+      const maxX = Math.max(...buildings.map(p=>p.x + p.w));
+      const b = buildings.shift();
+      b.x = maxX + 6;
+      buildings.push(b);
+    }
+    lamps.forEach(l=>{ l.x -= speed*0.6; });   // défilent en arrière-plan
+    if(lamps.length && lamps[0].x < -60){       // recycle à droite, espacement aléatoire
+      const maxX = Math.max(...lamps.map(p=>p.x));
+      const old = lamps.shift();
+      old.x = maxX + 360 + Math.random()*260;
+      lamps.push(old);
+    }
+    if(frame - lastSpawn >= spawnGap){ spawnObstacle(); lastSpawn = frame; spawnGap = nextGap(); }
+    obstacles.forEach(o=> o.x -= speed);
+    obstacles = obstacles.filter(o=> o.x + o.w > -10);
+    const invincible = Date.now() < invincibleUntil;
+    for(const o of obstacles){ if(collide(o)){ if(!invincible){ startDeath(); } break; } }
+
+    // apparition d'objets à récupérer (en hauteur, à attraper en sautant)
+    if(frame - lastCollect > 180 && Math.random() < 0.02){
+      const isStar = Math.random() < 0.12;   // étoile plus rare
+      collectibles.push({
+        x: W+20, y: GROUND - (55 + Math.random()*40),
+        type: isStar ? 'star' : 'fish', seed: Math.random()*100, got:false
+      });
+      lastCollect = frame;
+    }
+    collectibles.forEach(c=> c.x -= speed);
+    // collecte : proximité avec le chat
+    const ccx = cat.x + cat.w/2, ccy = cat.y - cat.h/2;
+    collectibles.forEach(c=>{
+      if(c.got) return;
+      if(Math.abs(c.x - ccx) < 26 && Math.abs(c.y - ccy) < 28){
+        c.got = true;
+        if(c.type==='fish'){ score += 100; }
+        else { invincibleUntil = Date.now() + 10000; }  // 10s d'invincibilité
+      }
+    });
+    collectibles = collectibles.filter(c=> !c.got && c.x > -30);
+
+    score++;
+    if(score % 350 === 0 && speed < 15) speed += 0.35;  // même rythme, continue jusqu'à 15
+    document.getElementById('score').textContent = score;
+    if(score > best){ best = score; document.getElementById('best').textContent = best; }
+  } else if(dying){
+    // ragdoll : le chat décolle, tourne, puis retombe ; scène figée derrière
+    deathT++;
+    catAngle += deathSpin;
+    deathVy += GRAVITY*0.6;
+    cat.y += deathVy;
+    if(deathT > 60){ dying = false; finishDeath(); }
+  }
+  obstacles.forEach(drawObstacle);
+  collectibles.forEach(drawCollectible);
+  // aura d'invincibilité autour du chat
+  if(Date.now() < invincibleUntil){
+    const left = (invincibleUntil - Date.now())/1000;
+    const flash = (left < 3 && Math.floor(frame/4)%2===0);  // clignote en fin
+    if(!flash){
+      ctx.save();
+      const aura = ctx.createRadialGradient(cat.x+cat.w/2, cat.y-cat.h/2, 6, cat.x+cat.w/2, cat.y-cat.h/2, 38);
+      const hue = (frame*6)%360;
+      aura.addColorStop(0, `hsla(${hue},90%,65%,.55)`);
+      aura.addColorStop(1, `hsla(${hue},90%,65%,0)`);
+      ctx.fillStyle = aura;
+      ctx.fillRect(cat.x-20, cat.y-cat.h-26, cat.w+40, cat.h+44);
+      ctx.restore();
+    }
+  }
+  drawCat();
+  requestAnimationFrame(loop);
+}
+
+/* ===================== CONTRÔLES ===================== */
+async function start(){
+  initAudio();
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  const name = document.getElementById('nameInput').value.trim() || 'chaton';
+  player = name;
+  document.getElementById('player').textContent = 'joueur : ' + player;
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('overScreen').classList.add('hidden');
+  await reset();
+  running = true;
+  startMusic();
+}
+
+document.getElementById('startBtn').addEventListener('click', start);
+document.getElementById('retryBtn').addEventListener('click', start);
+document.getElementById('nameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') start(); });
+
+// bouton "menu" : retour à la sélection pseudo/perso sans enregistrer la run
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  running = false; dying = false; holding = false;
+  obstacles = [];
+  document.getElementById('overScreen').classList.add('hidden');
+  document.getElementById('startScreen').classList.remove('hidden');
+  document.getElementById('nameInput').value = player || '';
+  refreshFullBoard();
+});
+
+window.addEventListener('keydown', e=>{
+  const t = e.target.tagName;
+  if(t==='INPUT' || t==='TEXTAREA') return; // ne pas sauter en tapant un texte
+  if(e.code==='Space' || e.code==='ArrowUp'){
+    e.preventDefault();
+    holding = true;
+    if(!running && !document.getElementById('overScreen').classList.contains('hidden')) start();
+    else jump();
+  }
+});
+window.addEventListener('keyup', e=>{
+  if(e.code==='Space' || e.code==='ArrowUp') holding = false;
+});
+canvas.addEventListener('pointerdown', ()=>{ holding = true; jump(); });
+window.addEventListener('pointerup', ()=>{ holding = false; });
+
+// Démarrage de la musique dès la première interaction sur le site
+// (les navigateurs bloquent l'audio sans geste utilisateur)
+function bootAudio(){
+  initAudio();
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  startMusic();
+  window.removeEventListener('pointerdown', bootAudio);
+  window.removeEventListener('keydown', bootAudio);
+}
+window.addEventListener('pointerdown', bootAudio);
+window.addEventListener('keydown', bootAudio);
+
+/* ===================== ADMIN ===================== */
+/* Identifiants modérateur — change-les ! (sécurité côté client = basique,
+   suffisant pour un devoir, pas pour de la vraie prod) */
+const ADMIN_USER = "admin";
+const ADMIN_PASS = "miaou2026";
+
+const adminModal = document.getElementById('adminModal');
+
+async function deleteScore(name){
+  if(ONLINE){
+    const u = `${DREAMLO_HTTP}/${DREAMLO_PRIVATE}/delete/${encodeURIComponent(name)}`;
+    try{ await fetch(PROXY + encodeURIComponent(u)); }
+    catch(e){ console.warn('Dreamlo delete échoué', e); }
+  }
+  // local : retire toutes les entrées de ce pseudo
+  const l = localScores().filter(s=>s.name!==name);
+  localStorage.setItem('catScores', JSON.stringify(l));
+}
+
+async function renderAdminList(){
+  const el = document.getElementById('adminList');
+  el.innerHTML = '<div class="hint">chargement…</div>';
+  const list = await fetchScores();
+  if(!list.length){ el.innerHTML = '<div class="hint">aucun score</div>'; return; }
+  el.innerHTML = '';
+  list.forEach(s=>{
+    const row = document.createElement('div');
+    row.className = 'admin-row';
+    row.innerHTML = `<span>${esc(s.name)} — <b>${s.score}</b></span>`;
+    const b = document.createElement('button');
+    b.className = 'del-btn'; b.textContent = 'supprimer';
+    b.onclick = async ()=>{
+      if(!confirm(`Supprimer "${s.name}" du classement ?`)) return;
+      b.textContent = '…'; b.disabled = true;
+      await deleteScore(s.name);
+      await renderAdminList();
+      refreshFullBoard();
+    };
+    row.appendChild(b);
+    el.appendChild(row);
+  });
+}
+
+document.getElementById('adminBtn').addEventListener('click', ()=>{
+  adminModal.classList.remove('hidden');
+  document.getElementById('adminLogin').classList.remove('hidden');
+  document.getElementById('adminPanel').classList.add('hidden');
+  document.getElementById('adminError').textContent = '';
+  document.getElementById('adminUser').value = '';
+  document.getElementById('adminPass').value = '';
+});
+document.getElementById('adminClose').addEventListener('click', ()=> adminModal.classList.add('hidden'));
+adminModal.addEventListener('click', e=>{ if(e.target===adminModal) adminModal.classList.add('hidden'); });
+
+function tryLogin(){
+  const u = document.getElementById('adminUser').value.trim();
+  const p = document.getElementById('adminPass').value;
+  if(u===ADMIN_USER && p===ADMIN_PASS){
+    document.getElementById('adminLogin').classList.add('hidden');
+    document.getElementById('adminPanel').classList.remove('hidden');
+    renderAdminList();
+  } else {
+    document.getElementById('adminError').textContent = 'Identifiant ou mot de passe incorrect.';
+  }
+}
+document.getElementById('adminSubmit').addEventListener('click', tryLogin);
+document.getElementById('adminPass').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
+document.getElementById('adminLogout').addEventListener('click', ()=>{
+  document.getElementById('adminPanel').classList.add('hidden');
+  document.getElementById('adminLogin').classList.remove('hidden');
+});
+
+/* ===================== SÉLECTEUR DE SKINS ===================== */
+function buildSkinPicker(){
+  const wrap = document.getElementById('skinPicker');
+  wrap.innerHTML = '';
+  // skin sauvegardé ?
+  const saved = localStorage.getItem('catSkin');
+  if(saved){ const s = SKINS.find(k=>k.id===saved); if(s) currentSkin = s; }
+  SKINS.forEach(skin=>{
+    const cell = document.createElement('div');
+    cell.className = 'skin-cell' + (skin.id===currentSkin.id ? ' sel' : '');
+    cell.title = skin.name;
+    const cv = document.createElement('canvas');
+    cv.width = 60; cv.height = 60;
+    const cc = cv.getContext('2d');
+    cc.translate(8, 38);            // place le sprite dans la vignette
+    drawCatSprite(cc, 44, 34, skin, 0);
+    cell.appendChild(cv);
+    cell.addEventListener('click', ()=>{
+      currentSkin = skin;
+      localStorage.setItem('catSkin', skin.id);
+      document.getElementById('skinLabel').textContent = skin.name;
+      document.querySelectorAll('.skin-cell').forEach(c=>c.classList.remove('sel'));
+      cell.classList.add('sel');
+    });
+    wrap.appendChild(cell);
+  });
+  document.getElementById('skinLabel').textContent = currentSkin.name;
+}
+
+// compte à rebours : fin dimanche 31/05/2026 à 23h59 (heure locale)
+const DEADLINE = new Date(2026, 4, 31, 23, 59, 0).getTime(); // mois 4 = mai
+function updateCountdown(){
+  const el = document.getElementById('countdown');
+  const diff = DEADLINE - Date.now();
+  if(diff <= 0){
+    el.textContent = '🏁 Classement terminé ! Bravo aux gagnants.';
+    el.classList.add('ended');
+    return;
+  }
+  const d = Math.floor(diff/86400000);
+  const hh = Math.floor(diff/3600000)%24;
+  const mm = Math.floor(diff/60000)%60;
+  const ss = Math.floor(diff/1000)%60;
+  const pad = n=>String(n).padStart(2,'0');
+  const dPart = d>0 ? `${d}j ` : '';
+  el.textContent = `⏳ fin du classement dans ${dPart}${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+}
+updateCountdown();
+setInterval(updateCountdown, 1000);
+
+// init
+buildSkinPicker();
+refreshFullBoard();
+loop();
+</script>
+</body>
+</html>
