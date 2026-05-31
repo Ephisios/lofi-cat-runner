@@ -204,18 +204,13 @@
 
 <script>
 /* ============================================================
-   CONFIG SCOREBOARD EN LIGNE (Dreamlo)
-   1. Va sur https://dreamlo.com/ -> "Get your own leaderboard now"
-   2. Copie tes 2 codes ci-dessous (Public Code et Private/Secret Code)
-   3. Tant que c'est vide, le classement reste LOCAL (sur ce navigateur)
+   CLASSEMENT EN LIGNE — via les fonctions serveur Netlify.
+   Aucun secret n'est présent ici : les codes Dreamlo et le mot de passe
+   admin vivent dans les variables d'environnement du serveur (Netlify),
+   jamais dans le code envoyé au navigateur.
    ============================================================ */
-const DREAMLO_PUBLIC  = "6a1acbe78f40bb17b0266757";   // <-- colle ton Public Code ici
-const DREAMLO_PRIVATE = "qrPh7ID1K0qHC9bgrej9sAZ87V4zcfQE-Y3Zot-WgmUg";   // <-- colle ton Private/Secret Code ici
-const ONLINE = DREAMLO_PUBLIC && DREAMLO_PRIVATE;
-// Dreamlo gratuit n'autorise pas le HTTPS : on passe par un relais qui va
-// chercher la version HTTP côté serveur (contourne SSL + CORS).
-const DREAMLO_HTTP = "http://www.dreamlo.com/lb";
-const PROXY = "https://api.codetabs.com/v1/proxy/?quest=";
+const API = "/.netlify/functions";   // base des fonctions serveur
+const ONLINE = true;
 let onlineOk = false;
 
 const canvas = document.getElementById('game');
@@ -390,29 +385,27 @@ function localSave(name, sc){
 
 async function submitScore(name, sc){
   localSave(name, sc); // toujours une copie locale de secours
-  if(!ONLINE) return;
-  const u = `${DREAMLO_HTTP}/${DREAMLO_PRIVATE}/add/${encodeURIComponent(name)}/${sc}`;
-  try{ await fetch(PROXY + encodeURIComponent(u)); }
-  catch(e){ console.warn('Dreamlo add échoué', e); }
+  try{
+    await fetch(`${API}/scores`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'add', name, score: sc })
+    });
+  }catch(e){ /* le serveur est injoignable : la copie locale prend le relais */ }
 }
 
 async function fetchScores(){
-  if(ONLINE){
-    const u = `${DREAMLO_HTTP}/${DREAMLO_PUBLIC}/json`;
-    try{
-      const r = await fetch(PROXY + encodeURIComponent(u));
+  try{
+    const r = await fetch(`${API}/scores`);
+    if(r.ok){
       const data = await r.json();
-      if(data && data.dreamlo){
+      if(data && Array.isArray(data.scores)){
         onlineOk = true;
-        let e = data.dreamlo.leaderboard ? data.dreamlo.leaderboard.entry : null;
-        if(!e) return [];
-        if(!Array.isArray(e)) e = [e];
-        return e.map(x=>({name:x.name, score:parseInt(x.score,10)}))
-                .sort((a,b)=>b.score-a.score);
+        return data.scores;
       }
-    }catch(err){ console.warn('Dreamlo injoignable, fallback local', err); }
-    onlineOk = false;
-  }
+    }
+  }catch(err){ /* fallback local ci-dessous */ }
+  onlineOk = false;
   return localScores();
 }
 
@@ -1066,20 +1059,20 @@ window.addEventListener('pointerdown', bootAudio);
 window.addEventListener('keydown', bootAudio);
 
 /* ===================== ADMIN ===================== */
-/* Identifiants modérateur — change-les ! (sécurité côté client = basique,
-   suffisant pour un devoir, pas pour de la vraie prod) */
-const ADMIN_USER = "admin";
-const ADMIN_PASS = "miaou2026";
-
+/* L'authentification est vérifiée CÔTÉ SERVEUR (fonction Netlify).
+   Aucun mot de passe n'est présent dans ce code. */
 const adminModal = document.getElementById('adminModal');
+let adminPass = "";   // mot de passe saisi, gardé en mémoire le temps de la session admin
 
 async function deleteScore(name){
-  if(ONLINE){
-    const u = `${DREAMLO_HTTP}/${DREAMLO_PRIVATE}/delete/${encodeURIComponent(name)}`;
-    try{ await fetch(PROXY + encodeURIComponent(u)); }
-    catch(e){ console.warn('Dreamlo delete échoué', e); }
-  }
-  // local : retire toutes les entrées de ce pseudo
+  try{
+    await fetch(`${API}/scores`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'delete', name, password: adminPass })
+    });
+  }catch(e){ /* serveur injoignable */ }
+  // local : retire aussi de la copie locale
   const l = localScores().filter(s=>s.name!==name);
   localStorage.setItem('catScores', JSON.stringify(l));
 }
@@ -1119,20 +1112,34 @@ document.getElementById('adminBtn').addEventListener('click', ()=>{
 document.getElementById('adminClose').addEventListener('click', ()=> adminModal.classList.add('hidden'));
 adminModal.addEventListener('click', e=>{ if(e.target===adminModal) adminModal.classList.add('hidden'); });
 
-function tryLogin(){
+async function tryLogin(){
   const u = document.getElementById('adminUser').value.trim();
   const p = document.getElementById('adminPass').value;
-  if(u===ADMIN_USER && p===ADMIN_PASS){
-    document.getElementById('adminLogin').classList.add('hidden');
-    document.getElementById('adminPanel').classList.remove('hidden');
-    renderAdminList();
-  } else {
-    document.getElementById('adminError').textContent = 'Identifiant ou mot de passe incorrect.';
+  const errEl = document.getElementById('adminError');
+  errEl.textContent = 'vérification…';
+  try{
+    const r = await fetch(`${API}/admin-login`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ user:u, password:p })
+    });
+    if(r.ok){
+      adminPass = p;   // gardé en mémoire pour autoriser les suppressions
+      errEl.textContent = '';
+      document.getElementById('adminLogin').classList.add('hidden');
+      document.getElementById('adminPanel').classList.remove('hidden');
+      renderAdminList();
+    } else {
+      errEl.textContent = 'Identifiant ou mot de passe incorrect.';
+    }
+  }catch(e){
+    errEl.textContent = 'Serveur injoignable. Réessaie.';
   }
 }
 document.getElementById('adminSubmit').addEventListener('click', tryLogin);
 document.getElementById('adminPass').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
 document.getElementById('adminLogout').addEventListener('click', ()=>{
+  adminPass = "";
   document.getElementById('adminPanel').classList.add('hidden');
   document.getElementById('adminLogin').classList.remove('hidden');
 });

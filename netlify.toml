@@ -1,0 +1,6 @@
+# Configuration Netlify
+# Le site est statique (racine) ; les fonctions serveur sont dans netlify/functions.
+
+[build]
+  publish = "."
+  functions = "netlify/functions"
